@@ -31,7 +31,7 @@ Open `mockup.html` in any modern web browser to explore the interactive interfac
 ## 📁 Project Structure
 
 ```
-blossom-tree-manager/
+BusinessContentManager/
 ├── BTM.md              # Complete project planning and specifications
 ├── mockup.html         # Interactive UI mockup
 └── README.md           # This file
