@@ -1,4 +1,3 @@
-
 Absolutely, Eli — here’s the **complete, structured Markdown version** of our entire conversation so far, from your very first prompt to this moment. It’s formatted for Obsidian or any Markdown editor, preserving all tables, wireframes, diagrams, and planning logic.
 
 ---
@@ -13,11 +12,33 @@ Absolutely, Eli — here’s the **complete, structured Markdown version** of ou
 
 ### Core Entities
 
-|Entity|Description|
-|---|---|
-|**School Account**|Represents a registered school. Each school has its own users, rooms, and settings.|
-|**User**|Can be a Teacher, Parent/Guardian, Kid, School Staff, School Administrator, Company Staff, or App Owner.|
-|**Room**|Represents a classroom with assigned grade level and teacher(s).|
+| Entity                   | Description                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **School Account** | Represents a registered school. Each school has its own users, rooms, and settings.                      |
+| **User**           | Can be a Teacher, Parent/Guardian, Kid, School Staff, School Administrator, Company Staff, or App Owner. |
+| **Room**           | Represents a classroom with assigned grade level and teacher(s).                                         |
+
+### Progressive Web App (PWA) Features
+
+| Feature                      | Description                                                        | Status         |
+| ---------------------------- | ------------------------------------------------------------------ | -------------- |
+| **Fullscreen Mode**    | App runs fullscreen when installed as PWA or via fullscreen button | ✅ Implemented |
+| **Installable**        | Can be installed on mobile home screen and desktop                 | ✅ Implemented |
+| **Responsive Design**  | Optimized for all screen sizes and orientations                    | ✅ Implemented |
+| **Offline Support**    | Foundation for offline functionality                               | 🔄 Planned     |
+| **Push Notifications** | Native push notifications for updates                              | 🔄 Planned     |
+| **Background Sync**    | Sync data when connection restored                                 | 🔄 Planned     |
+
+### UI/UX Features
+
+| Feature                      | Description                                                    | Status         |
+| ---------------------------- | -------------------------------------------------------------- | -------------- |
+| **Interactive Mockup** | Fully functional HTML prototype with navigation                | ✅ Implemented |
+| **Modern Design**      | Gradient backgrounds, glassmorphism effects, smooth animations | ✅ Implemented |
+| **Mobile-First**       | Responsive design that works on all devices                    | ✅ Implemented |
+| **Accessibility**      | Keyboard navigation, screen reader support                     | 🔄 Planned     |
+| **Dark Mode**          | Toggle between light and dark themes                           | 🔄 Planned     |
+| **Multi-language**     | English/Spanish support with easy expansion                    | 🔄 Planned     |
 
 ### Authentication & Roles
 
@@ -25,25 +46,25 @@ Absolutely, Eli — here’s the **complete, structured Markdown version** of ou
 
 - School Account Sign-In
 - User Sign-In (role-based):
-    - Teachers
-    - Parents/Guardians
-    - Kids (passive)
-    - School Staff
-    - School Administrator
-    - Company Staff
-    - App Owner
+  - Teachers
+  - Parents/Guardians
+  - Kids (passive)
+  - School Staff
+  - School Administrator
+  - Company Staff
+  - App Owner
 
 #### Role-Based Access Control (RBAC)
 
-|Role|Permissions|
-|---|---|
-|**App Owner**|Full access to all schools, users, settings|
-|**Company Staff**|Limited access to school-level data|
-|**School Admin**|Full control over their school|
-|**School Staff**|Partial admin rights|
-|**Teacher**|Room-level access|
-|**Parent/Guardian**|Child-level access|
-|**Kid**|Passive profile|
+| Role                      | Permissions                                 |
+| ------------------------- | ------------------------------------------- |
+| **App Owner**       | Full access to all schools, users, settings |
+| **Company Staff**   | Limited access to school-level data         |
+| **School Admin**    | Full control over their school              |
+| **School Staff**    | Partial admin rights                        |
+| **Teacher**         | Room-level access                           |
+| **Parent/Guardian** | Child-level access                          |
+| **Kid**             | Passive profile                             |
 
 ---
 
@@ -117,19 +138,19 @@ App Owner (Full Control)
 
 ## 🔐 Permissions Matrix
 
-|Action|App Owner|Company Staff|School Admin|School Staff|Teacher|Parent|Kid|
-|---|---|---|---|---|---|---|---|
-|View all schools|✅|✅ (limited)|❌|❌|❌|❌|❌|
-|Manage school accounts|✅|❌|❌|❌|❌|❌|❌|
-|Add/remove company staff|✅|❌|❌|❌|❌|❌|❌|
-|Create/edit rooms|✅|❌|✅|❌|❌|❌|❌|
-|Assign users to roles|✅|❌|✅|❌|❌|❌|❌|
-|View room roster|✅|✅|✅|✅|✅|❌|❌|
-|Mark attendance|✅|✅|✅|✅|✅|❌|❌|
-|Communicate with parents|✅|✅|✅|✅|✅|✅|❌|
-|View child check-in status|✅|✅|✅|✅|✅|✅|❌|
-|Link/unlink children|✅|✅|✅|❌|❌|Request|❌|
-|View/edit global settings|✅|❌|❌|❌|❌|❌|❌|
+| Action                     | App Owner | Company Staff | School Admin | School Staff | Teacher | Parent  | Kid |
+| -------------------------- | --------- | ------------- | ------------ | ------------ | ------- | ------- | --- |
+| View all schools           | ✅        | ✅ (limited)  | ❌           | ❌           | ❌      | ❌      | ❌  |
+| Manage school accounts     | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
+| Add/remove company staff   | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
+| Create/edit rooms          | ✅        | ❌            | ✅           | ❌           | ❌      | ❌      | ❌  |
+| Assign users to roles      | ✅        | ❌            | ✅           | ❌           | ❌      | ❌      | ❌  |
+| View room roster           | ✅        | ✅            | ✅           | ✅           | ✅      | ❌      | ❌  |
+| Mark attendance            | ✅        | ✅            | ✅           | ✅           | ✅      | ❌      | ❌  |
+| Communicate with parents   | ✅        | ✅            | ✅           | ✅           | ✅      | ✅      | ❌  |
+| View child check-in status | ✅        | ✅            | ✅           | ✅           | ✅      | ✅      | ❌  |
+| Link/unlink children       | ✅        | ✅            | ✅           | ❌           | ❌      | Request | ❌  |
+| View/edit global settings  | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
 
 ---
 
@@ -203,7 +224,7 @@ App Owner (Full Control)
 
 ### Room Management View
 
-```
+```text
 ┌────────────────────────────────────────────┐
 │ Room Management - [Room Name]              │
 ├────────────────────────────────────────────┤
@@ -223,11 +244,11 @@ App Owner (Full Control)
 
 ### Channels
 
-|Channel|Use Cases|
-|---|---|
-|Email|Account creation, daily summaries|
-|SMS|Urgent alerts, verification codes|
-|Push|Real-time updates, messages|
+| Channel | Use Cases                         |
+| ------- | --------------------------------- |
+| Email   | Account creation, daily summaries |
+| SMS     | Urgent alerts, verification codes |
+| Push    | Real-time updates, messages       |
 
 ### Tables
 
