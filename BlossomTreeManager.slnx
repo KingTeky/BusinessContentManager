@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/BlossomTreeManager.Web/BlossomTreeManager.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BlossomTreeManager.Web.Tests/BlossomTreeManager.Web.Tests.csproj" />
+  </Folder>
 </Solution>

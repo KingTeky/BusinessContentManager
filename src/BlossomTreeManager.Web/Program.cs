@@ -51,9 +51,12 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.AddScoped<ISchoolContext, SchoolContext>();
 builder.Services.AddScoped<ITenantGuardService, TenantGuardService>();
+builder.Services.AddScoped<IUserManagementAuthorizationService, UserManagementAuthorizationService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AttendanceExportService>();
 builder.Services.AddScoped<NotificationQueueService>();
+builder.Services.AddSingleton<INotificationChannelSender, LoggingNotificationChannelSender>();
+builder.Services.AddHostedService<NotificationDispatchWorker>();
 
 var app = builder.Build();
 

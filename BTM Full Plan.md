@@ -17,6 +17,8 @@ Last updated: 2026-07-09
 | Attendance page + CSV export | Done | Filtering/export plus guarded check-in/check-out actions. |
 | Settings page | Done | School settings load and save implemented. |
 | Notification queue service | Done | Queue and mark-sent service layer added. |
+| Notification background dispatcher | Done | Hosted worker dispatches pending notifications via channel sender adapter. |
+| Initial auth/tenant automated tests | Done | xUnit tests validate tenant guard, user management role authorization, and notification dispatch lifecycle mutations (9 passing tests). |
 | PWA/fullscreen baseline | Done | Manifest and fullscreen helper JS included. |
 | PostgreSQL runtime wiring | Blocked | Current SDK is .NET 10; stable Npgsql provider mismatch with EF 10. SQLite used temporarily. |
 | Multilingual support | Deferred | Explicitly postponed by request. |
@@ -137,10 +139,11 @@ Settings:
 ## Notifications
 Current:
 - Notification queue service writes pending notification records.
-- Helper method to mark pending notifications as sent.
+- Hosted background dispatcher processes pending records and marks sent/failed.
+- Logging channel sender adapter is wired as the current dispatch implementation.
 
 Pending:
-- Background dispatcher and provider integrations (email/SMS/push).
+- Provider integrations for real email/SMS/push delivery.
 
 ## PWA and Fullscreen
 Implemented:
@@ -156,7 +159,6 @@ Pending:
 - SQLite transitive dependency warning exists (`NU1903` for `SQLitePCLRaw.lib.e_sqlite3`).
 
 ## Next Milestones
-1. Add background notification worker and channel adapters.
-2. Move runtime provider to PostgreSQL when stable EF 10-compatible provider is available.
-3. Add tests for domain rules, authorization, and critical queries.
-4. Implement multilingual support later.
+1. Move runtime provider to PostgreSQL when stable EF 10-compatible provider is available.
+2. Add component/integration tests for page mutation flows and critical queries.
+3. Implement multilingual support later.

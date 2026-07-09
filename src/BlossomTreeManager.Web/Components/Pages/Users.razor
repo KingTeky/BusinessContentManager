@@ -10,6 +10,7 @@
 @inject ISchoolContext SchoolContext
 @inject ITenantGuardService TenantGuard
 @inject UserManager<ApplicationUser> UserManager
+@inject IUserManagementAuthorizationService UserManagementAuthorization
 
 <PageTitle>Users</PageTitle>
 
@@ -86,16 +87,7 @@ else
     {
         schoolId = await SchoolContext.GetSchoolIdAsync();
         currentUserId = await SchoolContext.GetUserIdAsync();
-
-        if (!string.IsNullOrWhiteSpace(currentUserId))
-        {
-            var currentUser = await UserManager.FindByIdAsync(currentUserId);
-            if (currentUser is not null)
-            {
-                canManageUsers = await UserManager.IsInRoleAsync(currentUser, ApplicationRoles.AppOwner)
-                                 || await UserManager.IsInRoleAsync(currentUser, ApplicationRoles.SchoolAdmin);
-            }
-        }
+        canManageUsers = await UserManagementAuthorization.CanManageUsersAsync(currentUserId);
 
         if (!schoolId.HasValue)
         {

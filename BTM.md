@@ -47,9 +47,18 @@ Pages:
 Services:
 - `src/BlossomTreeManager.Web/Services/SchoolContext.cs`
 - `src/BlossomTreeManager.Web/Services/TenantGuardService.cs`
+- `src/BlossomTreeManager.Web/Services/UserManagementAuthorizationService.cs`
 - `src/BlossomTreeManager.Web/Services/DashboardService.cs`
 - `src/BlossomTreeManager.Web/Services/AttendanceExportService.cs`
 - `src/BlossomTreeManager.Web/Services/NotificationQueueService.cs`
+- `src/BlossomTreeManager.Web/Services/NotificationDispatchWorker.cs`
+- `src/BlossomTreeManager.Web/Services/INotificationChannelSender.cs`
+- `src/BlossomTreeManager.Web/Services/LoggingNotificationChannelSender.cs`
+
+Tests:
+- `tests/BlossomTreeManager.Web.Tests/UnitTest1.cs` (tenant guard authorization and audit log behavior)
+- `tests/BlossomTreeManager.Web.Tests/UserManagementAuthorizationServiceTests.cs` (role-based user mutation authorization)
+- `tests/BlossomTreeManager.Web.Tests/NotificationDispatchWorkerTests.cs` (pending->sent/failed notification lifecycle)
 
 PWA/fullscreen:
 - `src/BlossomTreeManager.Web/wwwroot/manifest.webmanifest`
@@ -64,10 +73,11 @@ PWA/fullscreen:
 6. Attendance with filters/export and check-in/check-out mutations: Done
 7. Users role/status mutations: Done
 8. Notification queue foundation: Done
-9. PWA/fullscreen baseline: Done
-10. Multilingual support: Deferred
+9. Notification background dispatcher worker: Done
+10. PWA/fullscreen baseline: Done
+11. Expanded automated auth/tenant/notification tests: Done
+12. Multilingual support: Deferred
 
 ## Next Actions
-1. Add background notification sender workers.
-2. Add automated tests for authorization and tenant boundaries.
-3. Switch runtime provider to PostgreSQL when stable compatible package is available.
+1. Add component/integration tests for page-level mutation flows and role restrictions.
+2. Switch runtime provider to PostgreSQL when stable compatible package is available.

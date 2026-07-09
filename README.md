@@ -17,7 +17,8 @@ Implemented:
 - Students page with guarded student and enrollment management
 - Attendance page with filters, CSV export, and guarded check-in/check-out
 - Settings page with save support
-- Notification queue service foundation
+- Notification queue service with background dispatcher worker
+- Automated authorization, tenant-boundary, and notification lifecycle tests (9 passing)
 - PWA manifest and fullscreen helper JS
 
 Deferred:
@@ -69,6 +70,5 @@ Password:
 - Short implementation plan: `BTM.md`
 
 ## Next Steps
-1. Add background worker for notification dispatch.
-2. Add automated tests for authorization and tenant safety.
-3. Move runtime provider to PostgreSQL when stable compatible package is available.
+1. Add component/integration tests for page-level mutation actions (Rooms, Students, Attendance, Users UI interactions).
+2. Move runtime provider to PostgreSQL when stable compatible package is available.
