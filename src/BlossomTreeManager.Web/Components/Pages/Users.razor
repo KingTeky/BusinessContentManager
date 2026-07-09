@@ -1,0 +1,72 @@
+@page "/users"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+
+<PageTitle>Users</PageTitle>
+
+<h1>User Management</h1>
+
+@if (!schoolId.HasValue)
+{
+    <p>School context is not set for this account.</p>
+}
+else if (!loaded)
+{
+    <p>Loading users...</p>
+}
+else
+{
+    <div class="users-grid">
+        @foreach (var user in users)
+        {
+            <div class="user-card">
+                <h3>@user.FullName</h3>
+                <p><strong>Role:</strong> @user.RoleName</p>
+                <p><strong>Email:</strong> @user.Email</p>
+                <p><strong>Status:</strong> @(user.IsActive ? "Active" : "Inactive")</p>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private Guid? schoolId;
+    private bool loaded;
+    private List<UserVm> users = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        schoolId = await SchoolContext.GetSchoolIdAsync();
+        if (!schoolId.HasValue)
+        {
+            loaded = true;
+            return;
+        }
+
+        users = await DbContext.Users
+            .Where(x => x.SchoolId == schoolId.Value)
+            .Join(DbContext.UserRoles,
+                user => user.Id,
+                userRole => userRole.UserId,
+                (user, userRole) => new { user, userRole })
+            .Join(DbContext.Roles,
+                x => x.userRole.RoleId,
+                role => role.Id,
+                (x, role) => new UserVm(
+                    x.user.FullName,
+                    x.user.Email ?? string.Empty,
+                    role.Name ?? "Unknown",
+                    x.user.IsActive))
+            .OrderBy(x => x.FullName)
+            .ToListAsync();
+
+        loaded = true;
+    }
+
+    private sealed record UserVm(string FullName, string Email, string RoleName, bool IsActive);
+}

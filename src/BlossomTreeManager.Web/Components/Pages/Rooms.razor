@@ -1,0 +1,72 @@
+@page "/rooms"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+
+<PageTitle>Rooms</PageTitle>
+
+<h1>Rooms Management</h1>
+
+@if (!schoolId.HasValue)
+{
+    <p>School context is not set for this account.</p>
+}
+else if (!loaded)
+{
+    <p>Loading rooms...</p>
+}
+else
+{
+    <div class="rooms-grid">
+        @foreach (var room in rooms)
+        {
+            <div class="room-card">
+                <h3>@room.Name</h3>
+                <p><strong>Teacher:</strong> @room.Teacher</p>
+                <p><strong>Grade:</strong> @room.GradeLevel</p>
+                <p><strong>Students:</strong> @room.StudentCount</p>
+                <p><strong>Capacity:</strong> @room.Capacity</p>
+                <div class="stats">
+                    <span>Present Today: @room.PresentToday</span>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private Guid? schoolId;
+    private bool loaded;
+    private List<RoomVm> rooms = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        schoolId = await SchoolContext.GetSchoolIdAsync();
+        if (!schoolId.HasValue)
+        {
+            loaded = true;
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        rooms = await DbContext.Rooms
+            .Where(x => x.SchoolId == schoolId.Value)
+            .Select(room => new RoomVm(
+                room.Name,
+                room.GradeLevel,
+                room.Capacity,
+                room.TeacherAssignments.Select(x => x.TeacherUser.FullName).FirstOrDefault() ?? "Unassigned",
+                room.StudentEnrollments.Count(x => x.IsActive),
+                room.AttendanceRecords.Count(x => x.AttendanceDate == today && x.Status != BlossomTreeManager.Web.Data.Enums.AttendanceStatus.Absent)))
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+
+        loaded = true;
+    }
+
+    private sealed record RoomVm(string Name, string GradeLevel, int Capacity, string Teacher, int StudentCount, int PresentToday);
+}

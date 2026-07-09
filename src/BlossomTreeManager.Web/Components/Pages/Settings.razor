@@ -1,0 +1,113 @@
+@page "/settings"
+@attribute [Authorize(Policy = "SchoolAdminOrStaff")]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Entities
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+
+<PageTitle>School Settings</PageTitle>
+
+<h1>School Settings</h1>
+
+@if (!schoolId.HasValue)
+{
+    <p>School context is not set for this account.</p>
+}
+else if (settings is null)
+{
+    <p>Loading settings...</p>
+}
+else
+{
+    <EditForm Model="settings" OnValidSubmit="SaveAsync" class="settings-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label>Notification Email</label>
+            <InputText class="form-control" @bind-Value="settings.NotificationEmail" />
+        </div>
+
+        <div class="form-group">
+            <label>Default Check-in Time</label>
+            <input class="form-control" type="time" value="@GetCheckInValue()" @onchange="OnCheckInChanged" />
+        </div>
+
+        <div class="form-group">
+            <label>Default Check-out Time</label>
+            <input class="form-control" type="time" value="@GetCheckOutValue()" @onchange="OnCheckOutChanged" />
+        </div>
+
+        <div class="form-group">
+            <label>Primary Timezone</label>
+            <InputText class="form-control" @bind-Value="settings.PrimaryTimezone" />
+        </div>
+
+        <button type="submit" class="btn">Save Changes</button>
+    </EditForm>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <p class="mt-3">@statusMessage</p>
+    }
+}
+
+@code {
+    private Guid? schoolId;
+    private SchoolSetting? settings;
+    private string? statusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        schoolId = await SchoolContext.GetSchoolIdAsync();
+        if (!schoolId.HasValue)
+        {
+            return;
+        }
+
+        settings = await DbContext.SchoolSettings.FirstOrDefaultAsync(x => x.SchoolId == schoolId.Value);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (settings is null)
+        {
+            return;
+        }
+
+        await DbContext.SaveChangesAsync();
+        statusMessage = "Settings saved.";
+    }
+
+    private void OnCheckInChanged(ChangeEventArgs args)
+    {
+        if (settings is null || args.Value is null)
+        {
+            return;
+        }
+
+        if (TimeOnly.TryParse(args.Value.ToString(), out var parsed))
+        {
+            settings.DefaultCheckInTime = parsed;
+        }
+    }
+
+    private void OnCheckOutChanged(ChangeEventArgs args)
+    {
+        if (settings is null || args.Value is null)
+        {
+            return;
+        }
+
+        if (TimeOnly.TryParse(args.Value.ToString(), out var parsed))
+        {
+            settings.DefaultCheckOutTime = parsed;
+        }
+    }
+
+    private string GetCheckInValue() => settings?.DefaultCheckInTime.ToString("HH\\:mm") ?? "08:00";
+
+    private string GetCheckOutValue() => settings?.DefaultCheckOutTime.ToString("HH\\:mm") ?? "15:00";
+}

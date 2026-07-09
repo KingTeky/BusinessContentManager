@@ -1,0 +1,109 @@
+﻿@page "/"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+@inject DashboardService DashboardService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>School Admin Dashboard</h1>
+
+<div class="mb-3">
+	<button class="btn" @onclick="ToggleFullscreenAsync">@(isFullscreen ? "Exit Fullscreen" : "Fullscreen")</button>
+</div>
+
+@if (!schoolId.HasValue)
+{
+	<p>School context is not set for this account.</p>
+}
+else if (!loaded)
+{
+	<p>Loading dashboard...</p>
+}
+else
+{
+	<div class="cards">
+		@foreach (var card in roomCards)
+		{
+			<div class="card">
+				<h3>@card.RoomName</h3>
+				<p>Teacher: @card.TeacherName</p>
+				<div class="stats">
+					<span>Students: @card.StudentCount</span>
+					<span>Present: @card.PresentCount</span>
+				</div>
+			</div>
+		}
+	</div>
+
+	<div class="summary">
+		<h3>User Summary</h3>
+		<div class="summary-item">
+			<span>Total Students</span>
+			<span>@summary.TotalStudents</span>
+		</div>
+		<div class="summary-item">
+			<span>Total Teachers</span>
+			<span>@summary.TotalTeachers</span>
+		</div>
+		<div class="summary-item">
+			<span>Active Parents</span>
+			<span>@summary.ActiveParents</span>
+		</div>
+		<div class="summary-item">
+			<span>Today's Check-ins</span>
+			<span>@summary.TodaysCheckIns</span>
+		</div>
+	</div>
+}
+
+@code {
+	private Guid? schoolId;
+	private bool loaded;
+	private DashboardSummary summary = new(0, 0, 0, 0);
+	private List<RoomCardVm> roomCards = [];
+	private bool isFullscreen;
+
+	protected override async Task OnInitializedAsync()
+	{
+		schoolId = await SchoolContext.GetSchoolIdAsync();
+		if (!schoolId.HasValue)
+		{
+			loaded = true;
+			return;
+		}
+
+		var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+		summary = await DashboardService.GetSummaryAsync(schoolId.Value, today);
+
+		var rooms = await DbContext.Rooms
+			.Where(x => x.SchoolId == schoolId.Value)
+			.Include(x => x.TeacherAssignments)
+				.ThenInclude(x => x.TeacherUser)
+			.Include(x => x.StudentEnrollments)
+			.Include(x => x.AttendanceRecords)
+			.ToListAsync();
+
+		roomCards = rooms.Select(room => new RoomCardVm(
+				room.Name,
+				room.TeacherAssignments.Select(x => x.TeacherUser.FullName).FirstOrDefault() ?? "Unassigned",
+				room.StudentEnrollments.Count(x => x.IsActive),
+				room.AttendanceRecords.Count(x => x.AttendanceDate == today && x.Status != BlossomTreeManager.Web.Data.Enums.AttendanceStatus.Absent)))
+			.ToList();
+
+		loaded = true;
+	}
+
+	private async Task ToggleFullscreenAsync()
+	{
+		isFullscreen = await JSRuntime.InvokeAsync<bool>("app.toggleFullscreen");
+	}
+
+	private sealed record RoomCardVm(string RoomName, string TeacherName, int StudentCount, int PresentCount);
+}

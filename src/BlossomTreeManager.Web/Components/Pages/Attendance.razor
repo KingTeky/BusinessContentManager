@@ -1,0 +1,153 @@
+@page "/attendance"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Enums
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+@inject AttendanceExportService AttendanceExportService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Attendance Logs</PageTitle>
+
+<h1>Attendance Logs</h1>
+
+@if (!schoolId.HasValue)
+{
+    <p>School context is not set for this account.</p>
+}
+else
+{
+    <div class="summary mb-3">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <InputDate @bind-Value="startDate" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End Date</label>
+                <InputDate @bind-Value="endDate" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <InputSelect @bind-Value="selectedStatus" class="form-control">
+                    <option value="">All</option>
+                    @foreach (var status in Enum.GetValues<AttendanceStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button class="btn" @onclick="LoadAttendanceAsync">Filter</button>
+                <button class="btn" @onclick="ExportCsvAsync">Export CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <table class="attendance-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Student Name</th>
+                <th>Room</th>
+                <th>Check-in Time (UTC)</th>
+                <th>Check-out Time (UTC)</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in rows)
+            {
+                <tr>
+                    <td>@row.Date.ToString("yyyy-MM-dd")</td>
+                    <td>@row.StudentName</td>
+                    <td>@row.RoomName</td>
+                    <td>@(row.CheckInAtUtc?.ToString("HH:mm") ?? "-")</td>
+                    <td>@(row.CheckOutAtUtc?.ToString("HH:mm") ?? "-")</td>
+                    <td>@row.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Guid? schoolId;
+    private DateOnly? startDate;
+    private DateOnly? endDate;
+    private AttendanceStatus? selectedStatus;
+    private List<AttendanceVm> rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        schoolId = await SchoolContext.GetSchoolIdAsync();
+        await LoadAttendanceAsync();
+    }
+
+    private async Task LoadAttendanceAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            rows = [];
+            return;
+        }
+
+        var query = DbContext.AttendanceRecords
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId.Value)
+            .Include(x => x.Student)
+            .Include(x => x.Room)
+            .AsQueryable();
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(x => x.AttendanceDate >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(x => x.AttendanceDate <= endDate.Value);
+        }
+
+        if (selectedStatus.HasValue)
+        {
+            query = query.Where(x => x.Status == selectedStatus.Value);
+        }
+
+        rows = await query
+            .OrderByDescending(x => x.AttendanceDate)
+            .ThenBy(x => x.Student.LastName)
+            .ThenBy(x => x.Student.FirstName)
+            .Select(x => new AttendanceVm(
+                x.AttendanceDate,
+                x.Student.FirstName + " " + x.Student.LastName,
+                x.Room.Name,
+                x.CheckInAtUtc,
+                x.CheckOutAtUtc,
+                x.Status.ToString()))
+            .ToListAsync();
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            return;
+        }
+
+        var csv = await AttendanceExportService.BuildCsvAsync(schoolId.Value, startDate, endDate, selectedStatus);
+        await JSRuntime.InvokeVoidAsync("app.downloadFileFromText", $"attendance-{DateTime.UtcNow:yyyyMMdd}.csv", csv);
+    }
+
+    private sealed record AttendanceVm(
+        DateOnly Date,
+        string StudentName,
+        string RoomName,
+        DateTime? CheckInAtUtc,
+        DateTime? CheckOutAtUtc,
+        string Status);
+}

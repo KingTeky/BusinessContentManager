@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Logs
+*.log
+
+# .NET local tools and caches
+.vs/
+
+# SQLite local database
+*.db
+*.db-shm
+*.db-wal

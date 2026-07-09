@@ -1,0 +1,87 @@
+.navbar-toggler {
+    appearance: none;
+    cursor: pointer;
+    width: 3.2rem;
+    height: 2.4rem;
+    color: #667eea;
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    background: no-repeat center/1.75rem rgba(255, 255, 255, 0.9);
+}
+
+.navbar-toggler:checked {
+    background-color: rgba(118, 75, 162, 0.15);
+}
+
+.top-row {
+    min-height: 3.5rem;
+    border-bottom: 1px solid #eceefe;
+}
+
+.navbar-brand {
+    color: #667eea;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.nav-item {
+    font-size: 0.95rem;
+    padding-bottom: 0.45rem;
+}
+
+.nav-item:first-of-type {
+    padding-top: 1rem;
+}
+
+.nav-item:last-of-type {
+    padding-bottom: 1rem;
+}
+
+.nav-item ::deep .nav-link {
+    color: #4f5675;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    height: 2.8rem;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding-left: 0.8rem;
+    text-decoration: none;
+}
+
+.nav-item ::deep a.active,
+.nav-item ::deep .nav-link.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+}
+
+.nav-item ::deep .nav-link:hover {
+    background: rgba(102, 126, 234, 0.13);
+    color: #2f3350;
+}
+
+.nav-scrollable {
+    display: none;
+}
+
+.navbar-toggler:checked ~ .nav-scrollable {
+    display: block;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .nav-scrollable {
+        /* Never collapse the sidebar for wide screens */
+        display: block;
+
+        /* Allow sidebar to scroll for tall menus */
+        height: calc(100vh - 3.5rem);
+        overflow-y: auto;
+    }
+}

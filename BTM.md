@@ -1,309 +1,69 @@
-Absolutely, Eli — here’s the **complete, structured Markdown version** of our entire conversation so far, from your very first prompt to this moment. It’s formatted for Obsidian or any Markdown editor, preserving all tables, wireframes, diagrams, and planning logic.
-
----
-
-# 🌳 Blossom Tree Manager – Full Planning Session
-
-## 🧠 Initial Prompt
-
-> Help me plan a school check-in application (let's call this app: Blossom Tree Manager, and Blossom Tree is also the name of the company) with the following features...
-
-## ✅ Feature Blueprint
-
-### Core Entities
-
-| Entity                   | Description                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **School Account** | Represents a registered school. Each school has its own users, rooms, and settings.                      |
-| **User**           | Can be a Teacher, Parent/Guardian, Kid, School Staff, School Administrator, Company Staff, or App Owner. |
-| **Room**           | Represents a classroom with assigned grade level and teacher(s).                                         |
-
-### Progressive Web App (PWA) Features
-
-| Feature                      | Description                                                        | Status         |
-| ---------------------------- | ------------------------------------------------------------------ | -------------- |
-| **Fullscreen Mode**    | App runs fullscreen when installed as PWA or via fullscreen button | ✅ Implemented |
-| **Installable**        | Can be installed on mobile home screen and desktop                 | ✅ Implemented |
-| **Responsive Design**  | Optimized for all screen sizes and orientations                    | ✅ Implemented |
-| **Offline Support**    | Foundation for offline functionality                               | 🔄 Planned     |
-| **Push Notifications** | Native push notifications for updates                              | 🔄 Planned     |
-| **Background Sync**    | Sync data when connection restored                                 | 🔄 Planned     |
-
-### UI/UX Features
-
-| Feature                      | Description                                                    | Status         |
-| ---------------------------- | -------------------------------------------------------------- | -------------- |
-| **Interactive Mockup** | Fully functional HTML prototype with navigation                | ✅ Implemented |
-| **Modern Design**      | Gradient backgrounds, glassmorphism effects, smooth animations | ✅ Implemented |
-| **Mobile-First**       | Responsive design that works on all devices                    | ✅ Implemented |
-| **Accessibility**      | Keyboard navigation, screen reader support                     | 🔄 Planned     |
-| **Dark Mode**          | Toggle between light and dark themes                           | 🔄 Planned     |
-| **Multi-language**     | English/Spanish support with easy expansion                    | 🔄 Planned     |
-
-### Authentication & Roles
-
-#### Sign-In System
-
-- School Account Sign-In
-- User Sign-In (role-based):
-  - Teachers
-  - Parents/Guardians
-  - Kids (passive)
-  - School Staff
-  - School Administrator
-  - Company Staff
-  - App Owner
-
-#### Role-Based Access Control (RBAC)
-
-| Role                      | Permissions                                 |
-| ------------------------- | ------------------------------------------- |
-| **App Owner**       | Full access to all schools, users, settings |
-| **Company Staff**   | Limited access to school-level data         |
-| **School Admin**    | Full control over their school              |
-| **School Staff**    | Partial admin rights                        |
-| **Teacher**         | Room-level access                           |
-| **Parent/Guardian** | Child-level access                          |
-| **Kid**             | Passive profile                             |
-
----
-
-## 🔄 User Flows by Role
-
-### App Owner
-
-- Sign In → Dashboard
-- View/manage all schools
-- Add/remove company staff
-- Audit logs
-- Override school settings
-
-### Company Staff
-
-- Sign In → Company Dashboard
-- View school accounts
-- Assist with setup
-- Cannot manage other company staff or app owner
-
-### School Administrator
-
-- Sign In → School Admin Dashboard
-- Create/edit rooms
-- Assign users
-- Approve parent accounts
-- Manage school settings
-
-### Teacher
-
-- Sign In → Teacher Dashboard
-- View assigned rooms/students
-- Mark attendance
-- Communicate with parents
-
-### School Staff
-
-- Sign In → Staff Dashboard
-- View student list
-- Assist with check-in/out
-- Limited edit rights
-
-### Parent/Guardian
-
-- Sign In → Parent Dashboard
-- View child’s check-in status
-- Communicate with teachers
-- Request updates
-- Link/unlink children (admin approval)
-
-### Kid
-
-- Passive account
-- Linked to parent and room
-
----
-
-## 🧱 Role Hierarchy Diagram
-
-```plaintext
-App Owner (Full Control)
-└── Company Staff (Limited Global Control)
-    └── School Administrator (Full School Control)
-        └── School Staff (Partial School Control)
-            └── Teacher (Room-Level Control)
-                └── Parent/Guardian (Child-Level Access)
-                    └── Kid (Passive Profile)
-```
-
----
-
-## 🔐 Permissions Matrix
-
-| Action                     | App Owner | Company Staff | School Admin | School Staff | Teacher | Parent  | Kid |
-| -------------------------- | --------- | ------------- | ------------ | ------------ | ------- | ------- | --- |
-| View all schools           | ✅        | ✅ (limited)  | ❌           | ❌           | ❌      | ❌      | ❌  |
-| Manage school accounts     | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
-| Add/remove company staff   | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
-| Create/edit rooms          | ✅        | ❌            | ✅           | ❌           | ❌      | ❌      | ❌  |
-| Assign users to roles      | ✅        | ❌            | ✅           | ❌           | ❌      | ❌      | ❌  |
-| View room roster           | ✅        | ✅            | ✅           | ✅           | ✅      | ❌      | ❌  |
-| Mark attendance            | ✅        | ✅            | ✅           | ✅           | ✅      | ❌      | ❌  |
-| Communicate with parents   | ✅        | ✅            | ✅           | ✅           | ✅      | ✅      | ❌  |
-| View child check-in status | ✅        | ✅            | ✅           | ✅           | ✅      | ✅      | ❌  |
-| Link/unlink children       | ✅        | ✅            | ✅           | ❌           | ❌      | Request | ❌  |
-| View/edit global settings  | ✅        | ❌            | ❌           | ❌           | ❌      | ❌      | ❌  |
-
----
-
-## 🧭 Wireframes
-
-### App Owner Dashboard
-
-```
-┌────────────────────────────────────────────┐
-│ Blossom Tree Manager - App Owner Dashboard│
-├────────────────────────────────────────────┤
-│ Sidebar:                                   │
-│ - Schools                                  │
-│ - Company Staff                            │
-│ - Audit Logs                               │
-│ - Global Settings                          │
-│ - Logout                                   │
-├────────────────────────────────────────────┤
-│ Main Panel:                                │
-│ [Search Schools] [Add School]              │
-│ ┌────────────┬────────────┬────────────┐   │
-│ │ School A   │ School B   │ School C   │   │
-│ └────────────┴────────────┴────────────┘   │
-│ [Recent Activity Logs]                     │
-└────────────────────────────────────────────┘
-```
-
-### School Admin Dashboard
-
-```
-┌────────────────────────────────────────────┐
-│ School Admin Dashboard - [School Name]     │
-├────────────────────────────────────────────┤
-│ Sidebar:                                   │
-│ - Rooms                                    │
-│ - Users                                    │
-│ - Attendance Logs                          │
-│ - Settings                                 │
-│ - Logout                                   │
-├────────────────────────────────────────────┤
-│ Main Panel:                                │
-│ [Add Room] [Add User]                      │
-│ ┌────────────┬────────────┬────────────┐   │
-│ │ Room 101   │ Room 102   │ Room 103   │   │
-│ └────────────┴────────────┴────────────┘   │
-│ [User Summary]                             │
-└────────────────────────────────────────────┘
-```
-
-### Teacher Dashboard
-
-```
-┌────────────────────────────────────────────┐
-│ Teacher Dashboard - [Teacher Name]         │
-├────────────────────────────────────────────┤
-│ Sidebar:                                   │
-│ - My Rooms                                 │
-│ - Students                                 │
-│ - Messages                                 │
-│ - Attendance                               │
-│ - Logout                                   │
-├────────────────────────────────────────────┤
-│ Main Panel:                                │
-│ [Room: 1st Grade - Room 101]               │
-│ ┌────────────┬────────────┬────────────┐   │
-│ │ Student A  │ Student B  │ Student C  │   │
-│ └────────────┴────────────┴────────────┘   │
-│ [Check-In Panel]                           │
-└────────────────────────────────────────────┘
-```
-
-### Room Management View
-
-```text
-┌────────────────────────────────────────────┐
-│ Room Management - [Room Name]              │
-├────────────────────────────────────────────┤
-│ [Edit Room Info] [Assign Teacher]          │
-│ Grade Level: 2nd Grade                     │
-│ Assigned Teacher: Ms. Rivera               │
-│ ┌────────────┬────────────┬────────────┐   │
-│ │ Student A  │ Student B  │ Student C  │   │
-│ └────────────┴────────────┴────────────┘   │
-│ [Add Student] [View Attendance Logs]       │
-└────────────────────────────────────────────┘
-```
-
----
-
-## 📣 Notification System
-
-### Channels
-
-| Channel | Use Cases                         |
-| ------- | --------------------------------- |
-| Email   | Account creation, daily summaries |
-| SMS     | Urgent alerts, verification codes |
-| Push    | Real-time updates, messages       |
-
-### Tables
-
-#### `notifications`
-
-```sql
-CREATE TABLE notifications (
-  id UUID PRIMARY KEY,
-  sender_id UUID REFERENCES users(id),
-  receiver_id UUID REFERENCES users(id),
-  message TEXT NOT NULL,
-  channel ENUM('email', 'sms', 'push') NOT NULL,
-  status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
-  sent_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### `user_preferences`
-
-```sql
-CREATE TABLE user_preferences (
-  user_id UUID PRIMARY KEY REFERENCES users(id),
-  email_opt_in BOOLEAN DEFAULT TRUE,
-  sms_opt_in BOOLEAN DEFAULT FALSE,
-  push_opt_in BOOLEAN DEFAULT TRUE,
-  quiet_hours_start TIME,
-  quiet_hours_end TIME
-);
-```
-
----
-
-## 🌐 Multilingual Support (English & Spanish)
-
-### Folder Structure
-
-```plaintext
-/locales
-  └── en/translation.json
-  └── es/translation.json
-```
-
-### Sample Keys
-
-```json
-{
-  "dashboard.title": "Welcome to Blossom Tree Manager",
-  "room.grade": "Grade Level",
-  "checkin.success": "Check-in successful"
-}
-```
-
-```json
-{
-  "dashboard.title": "Bienvenido a Blossom Tree Manager",
- 
-```
+# Blossom Tree Manager - Working Plan
+
+## Summary
+This file is the short working plan. For detailed implementation and tracker state, see `BTM Full Plan.md`.
+
+Current implementation is a C# Blazor Web App with Identity, EF Core entities, seed data, and pages for Dashboard, Rooms, Users, Attendance, and Settings.
+
+## Scope
+- Multi-role school management and attendance tracking
+- Role-based authorization
+- School-scoped data model
+- Notification queue baseline
+- PWA/fullscreen baseline
+
+Out of scope for now:
+- Multilingual support (deferred)
+
+## Architecture Decision
+Chosen stack:
+- ASP.NET Core Blazor Web App
+- ASP.NET Core Identity
+- Entity Framework Core
+
+Database provider state:
+- Running now: SQLite
+- Intended later: PostgreSQL when EF 10 provider compatibility is stable
+
+## Implemented Components
+Application core:
+- `src/BlossomTreeManager.Web/Program.cs`
+- `src/BlossomTreeManager.Web/Data/ApplicationDbContext.cs`
+- `src/BlossomTreeManager.Web/Data/ApplicationUser.cs`
+
+Domain entities:
+- School, Room, StudentProfile, ParentStudentLink
+- RoomTeacherAssignment, StudentEnrollment, AttendanceRecord
+- SchoolSetting, NotificationMessage, AuditLogEntry
+
+Pages:
+- `src/BlossomTreeManager.Web/Components/Pages/Home.razor`
+- `src/BlossomTreeManager.Web/Components/Pages/Rooms.razor`
+- `src/BlossomTreeManager.Web/Components/Pages/Users.razor`
+- `src/BlossomTreeManager.Web/Components/Pages/Attendance.razor`
+- `src/BlossomTreeManager.Web/Components/Pages/Settings.razor`
+
+Services:
+- `src/BlossomTreeManager.Web/Services/SchoolContext.cs`
+- `src/BlossomTreeManager.Web/Services/DashboardService.cs`
+- `src/BlossomTreeManager.Web/Services/AttendanceExportService.cs`
+- `src/BlossomTreeManager.Web/Services/NotificationQueueService.cs`
+
+PWA/fullscreen:
+- `src/BlossomTreeManager.Web/wwwroot/manifest.webmanifest`
+- `src/BlossomTreeManager.Web/wwwroot/js/app.js`
+
+## Delivery Order Status
+1. Auth and role policies: Done
+2. Entities and EF migrations: Done
+3. Rooms and Users pages: Done
+4. Attendance with filters/export: Done
+5. Notification queue foundation: Done
+6. PWA/fullscreen baseline: Done
+7. Multilingual support: Deferred
+
+## Next Actions
+1. Add CRUD operations for entities currently list-only.
+2. Add background notification sender workers.
+3. Add automated tests for authorization and tenant boundaries.
+4. Switch runtime provider to PostgreSQL when stable compatible package is available.
