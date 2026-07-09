@@ -10,10 +10,12 @@ Implemented:
 - Identity authentication and role policies
 - EF Core domain model and migrations
 - Seed data for demo school and users
+- Tenant mutation guard service with audit logging hooks
 - Dashboard page with live summary
-- Rooms page (data-backed list)
-- Users page (data-backed list with roles)
-- Attendance page with filters and CSV export
+- Rooms page with guarded CRUD
+- Users page with guarded role/status mutations (SchoolAdmin/AppOwner)
+- Students page with guarded student and enrollment management
+- Attendance page with filters, CSV export, and guarded check-in/check-out
 - Settings page with save support
 - Notification queue service foundation
 - PWA manifest and fullscreen helper JS
@@ -67,7 +69,6 @@ Password:
 - Short implementation plan: `BTM.md`
 
 ## Next Steps
-1. Add CRUD flows for Rooms, Users, Students, and Attendance records.
-2. Add background worker for notification dispatch.
-3. Add automated tests for authorization and tenant safety.
-4. Move runtime provider to PostgreSQL when stable compatible package is available.
+1. Add background worker for notification dispatch.
+2. Add automated tests for authorization and tenant safety.
+3. Move runtime provider to PostgreSQL when stable compatible package is available.

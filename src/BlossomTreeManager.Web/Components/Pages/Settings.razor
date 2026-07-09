@@ -7,6 +7,7 @@
 @using BlossomTreeManager.Web.Services
 @inject ApplicationDbContext DbContext
 @inject ISchoolContext SchoolContext
+@inject ITenantGuardService TenantGuard
 
 <PageTitle>School Settings</PageTitle>
 
@@ -77,8 +78,30 @@ else
             return;
         }
 
-        await DbContext.SaveChangesAsync();
-        statusMessage = "Settings saved.";
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                settings.SchoolId,
+                action: "Settings:Update",
+                entityName: nameof(SchoolSetting),
+                entityId: settings.Id.ToString(),
+                deniedMetadata: new { settings.SchoolId });
+
+            await DbContext.SaveChangesAsync();
+
+            await TenantGuard.LogMutationAsync(
+                action: "Settings:Update",
+                entityName: nameof(SchoolSetting),
+                entityId: settings.Id.ToString(),
+                schoolId: settings.SchoolId,
+                metadata: new { settings.NotificationEmail, settings.PrimaryTimezone });
+
+            statusMessage = "Settings saved.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to modify settings outside your school scope.";
+        }
     }
 
     private void OnCheckInChanged(ChangeEventArgs args)

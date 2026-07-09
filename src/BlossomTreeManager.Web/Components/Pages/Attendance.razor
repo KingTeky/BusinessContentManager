@@ -4,10 +4,12 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.JSInterop
 @using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Entities
 @using BlossomTreeManager.Web.Data.Enums
 @using BlossomTreeManager.Web.Services
 @inject ApplicationDbContext DbContext
 @inject ISchoolContext SchoolContext
+@inject ITenantGuardService TenantGuard
 @inject AttendanceExportService AttendanceExportService
 @inject IJSRuntime JSRuntime
 
@@ -21,6 +23,43 @@
 }
 else
 {
+    <div class="summary mb-3">
+        <h3>Attendance Actions</h3>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Student</label>
+                <select class="form-control" @bind="selectedStudentId">
+                    <option value="">Select student</option>
+                    @foreach (var student in studentOptions)
+                    {
+                        <option value="@student.StudentId">@student.DisplayName (@student.RoomName)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Attendance Date</label>
+                <InputDate @bind-Value="mutationDate" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Status</label>
+                <InputSelect @bind-Value="checkInStatus" class="form-control">
+                    @foreach (var status in Enum.GetValues<AttendanceStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button class="btn" @onclick="CheckInAsync">Check In</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <p class="mb-3">@statusMessage</p>
+    }
+
     <div class="summary mb-3">
         <div class="row g-3">
             <div class="col-md-3">
@@ -57,6 +96,7 @@ else
                 <th>Check-in Time (UTC)</th>
                 <th>Check-out Time (UTC)</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -69,6 +109,12 @@ else
                     <td>@(row.CheckInAtUtc?.ToString("HH:mm") ?? "-")</td>
                     <td>@(row.CheckOutAtUtc?.ToString("HH:mm") ?? "-")</td>
                     <td>@row.Status</td>
+                    <td>
+                        @if (row.CanCheckOut)
+                        {
+                            <button class="btn" @onclick="() => CheckOutAsync(row.Id)">Check Out</button>
+                        }
+                    </td>
                 </tr>
             }
         </tbody>
@@ -80,12 +126,50 @@ else
     private DateOnly? startDate;
     private DateOnly? endDate;
     private AttendanceStatus? selectedStatus;
+    private Guid? selectedStudentId;
+    private AttendanceStatus checkInStatus = AttendanceStatus.Present;
+    private DateOnly mutationDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+    private string? statusMessage;
     private List<AttendanceVm> rows = [];
+    private List<StudentOptionVm> studentOptions = [];
 
     protected override async Task OnInitializedAsync()
     {
         schoolId = await SchoolContext.GetSchoolIdAsync();
+        await LoadStudentOptionsAsync();
         await LoadAttendanceAsync();
+    }
+
+    private async Task LoadStudentOptionsAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            studentOptions = [];
+            return;
+        }
+
+        studentOptions = await DbContext.Students
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId.Value && x.IsActive)
+            .Select(student => new
+            {
+                student.Id,
+                student.FirstName,
+                student.LastName,
+                ActiveEnrollment = student.Enrollments
+                    .Where(e => e.IsActive)
+                    .Select(e => new { e.RoomId, RoomName = e.Room.Name })
+                    .FirstOrDefault()
+            })
+            .Where(x => x.ActiveEnrollment != null)
+            .OrderBy(x => x.LastName)
+            .ThenBy(x => x.FirstName)
+            .Select(x => new StudentOptionVm(
+                x.Id,
+                x.FirstName + " " + x.LastName,
+                x.ActiveEnrollment!.RoomId,
+                x.ActiveEnrollment.RoomName))
+            .ToListAsync();
     }
 
     private async Task LoadAttendanceAsync()
@@ -123,13 +207,164 @@ else
             .ThenBy(x => x.Student.LastName)
             .ThenBy(x => x.Student.FirstName)
             .Select(x => new AttendanceVm(
+                x.Id,
                 x.AttendanceDate,
                 x.Student.FirstName + " " + x.Student.LastName,
                 x.Room.Name,
                 x.CheckInAtUtc,
                 x.CheckOutAtUtc,
-                x.Status.ToString()))
+                x.Status.ToString(),
+                x.CheckInAtUtc.HasValue && !x.CheckOutAtUtc.HasValue))
             .ToListAsync();
+    }
+
+    private async Task CheckInAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            statusMessage = "School context is not set for this account.";
+            return;
+        }
+
+        if (!selectedStudentId.HasValue)
+        {
+            statusMessage = "Select a student before check-in.";
+            return;
+        }
+
+        var student = studentOptions.FirstOrDefault(x => x.StudentId == selectedStudentId.Value);
+        if (student is null)
+        {
+            statusMessage = "Selected student does not have an active room assignment.";
+            return;
+        }
+
+        var userId = await SchoolContext.GetUserIdAsync();
+        var existing = await DbContext.AttendanceRecords
+            .FirstOrDefaultAsync(x => x.SchoolId == schoolId.Value && x.StudentId == selectedStudentId.Value && x.AttendanceDate == mutationDate);
+
+        try
+        {
+            if (existing is not null)
+            {
+                await TenantGuard.RequireSchoolMutationAccessAsync(
+                    existing.SchoolId,
+                    action: "Attendance:CheckIn",
+                    entityName: nameof(AttendanceRecord),
+                    entityId: existing.Id.ToString(),
+                    deniedMetadata: new { existing.SchoolId, existing.StudentId, existing.AttendanceDate });
+
+                if (existing.CheckInAtUtc.HasValue)
+                {
+                    statusMessage = "A check-in already exists for this student on this date.";
+                    return;
+                }
+
+                existing.RoomId = student.RoomId;
+                existing.CheckInAtUtc = DateTime.UtcNow;
+                existing.Status = checkInStatus;
+                existing.MarkedByUserId = userId;
+
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Attendance:CheckIn",
+                    entityName: nameof(AttendanceRecord),
+                    entityId: existing.Id.ToString(),
+                    schoolId: existing.SchoolId,
+                    metadata: new { existing.StudentId, existing.RoomId, existing.AttendanceDate, existing.Status });
+
+                statusMessage = "Check-in recorded.";
+            }
+            else
+            {
+                var record = new AttendanceRecord
+                {
+                    Id = Guid.NewGuid(),
+                    SchoolId = schoolId.Value,
+                    StudentId = selectedStudentId.Value,
+                    RoomId = student.RoomId,
+                    AttendanceDate = mutationDate,
+                    CheckInAtUtc = DateTime.UtcNow,
+                    Status = checkInStatus,
+                    MarkedByUserId = userId
+                };
+
+                await TenantGuard.RequireSchoolMutationAccessAsync(
+                    record.SchoolId,
+                    action: "Attendance:CheckIn",
+                    entityName: nameof(AttendanceRecord),
+                    entityId: record.Id.ToString(),
+                    deniedMetadata: new { record.SchoolId, record.StudentId, record.AttendanceDate });
+
+                DbContext.AttendanceRecords.Add(record);
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Attendance:CheckIn",
+                    entityName: nameof(AttendanceRecord),
+                    entityId: record.Id.ToString(),
+                    schoolId: record.SchoolId,
+                    metadata: new { record.StudentId, record.RoomId, record.AttendanceDate, record.Status });
+
+                statusMessage = "Check-in recorded.";
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to modify attendance outside your school scope.";
+        }
+
+        await LoadAttendanceAsync();
+    }
+
+    private async Task CheckOutAsync(Guid attendanceId)
+    {
+        var record = await DbContext.AttendanceRecords.FirstOrDefaultAsync(x => x.Id == attendanceId);
+        if (record is null)
+        {
+            statusMessage = "Attendance record could not be found.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                record.SchoolId,
+                action: "Attendance:CheckOut",
+                entityName: nameof(AttendanceRecord),
+                entityId: record.Id.ToString(),
+                deniedMetadata: new { record.SchoolId, record.StudentId, record.AttendanceDate });
+
+            if (!record.CheckInAtUtc.HasValue)
+            {
+                statusMessage = "Cannot check out a student that has no check-in time.";
+                return;
+            }
+
+            if (record.CheckOutAtUtc.HasValue)
+            {
+                statusMessage = "Student is already checked out.";
+                return;
+            }
+
+            record.CheckOutAtUtc = DateTime.UtcNow;
+            record.MarkedByUserId = await SchoolContext.GetUserIdAsync();
+
+            await DbContext.SaveChangesAsync();
+            await TenantGuard.LogMutationAsync(
+                action: "Attendance:CheckOut",
+                entityName: nameof(AttendanceRecord),
+                entityId: record.Id.ToString(),
+                schoolId: record.SchoolId,
+                metadata: new { record.StudentId, record.RoomId, record.AttendanceDate, record.CheckOutAtUtc });
+
+            statusMessage = "Check-out recorded.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to modify attendance outside your school scope.";
+        }
+
+        await LoadAttendanceAsync();
     }
 
     private async Task ExportCsvAsync()
@@ -144,10 +379,18 @@ else
     }
 
     private sealed record AttendanceVm(
+        Guid Id,
         DateOnly Date,
         string StudentName,
         string RoomName,
         DateTime? CheckInAtUtc,
         DateTime? CheckOutAtUtc,
-        string Status);
+        string Status,
+        bool CanCheckOut);
+
+    private sealed record StudentOptionVm(
+        Guid StudentId,
+        string DisplayName,
+        Guid RoomId,
+        string RoomName);
 }

@@ -1,0 +1,493 @@
+@page "/students"
+@attribute [Authorize(Policy = "SchoolAdminOrStaff")]
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Entities
+@using BlossomTreeManager.Web.Services
+@inject ApplicationDbContext DbContext
+@inject ISchoolContext SchoolContext
+@inject ITenantGuardService TenantGuard
+
+<PageTitle>Students</PageTitle>
+
+<h1>Students Management</h1>
+
+@if (!schoolId.HasValue)
+{
+    <p>School context is not set for this account.</p>
+}
+else if (!loaded)
+{
+    <p>Loading students...</p>
+}
+else
+{
+    <EditForm Model="studentForm" OnValidSubmit="SaveStudentAsync" class="settings-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label>First Name</label>
+            <InputText class="form-control" @bind-Value="studentForm.FirstName" />
+        </div>
+
+        <div class="form-group">
+            <label>Last Name</label>
+            <InputText class="form-control" @bind-Value="studentForm.LastName" />
+        </div>
+
+        <div class="form-group">
+            <label>Date of Birth</label>
+            <input class="form-control" type="date" value="@GetDobValue()" @onchange="OnDobChanged" />
+        </div>
+
+        <button type="submit" class="btn">@(editingStudentId.HasValue ? "Save Student" : "Add Student")</button>
+        @if (editingStudentId.HasValue)
+        {
+            <button type="button" class="btn ms-2" @onclick="CancelEdit">Cancel</button>
+        }
+    </EditForm>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <p class="mt-3">@statusMessage</p>
+    }
+
+    <div class="users-grid mt-3">
+        @foreach (var student in students)
+        {
+            <div class="user-card">
+                <h3>@student.DisplayName</h3>
+                <p><strong>Status:</strong> @(student.IsActive ? "Active" : "Inactive")</p>
+                <p><strong>Date of Birth:</strong> @(student.DateOfBirth?.ToString("yyyy-MM-dd") ?? "N/A")</p>
+                <p><strong>Current Room:</strong> @student.ActiveRoomName</p>
+                <p><strong>Attendance Records:</strong> @student.AttendanceCount</p>
+
+                <div class="form-group">
+                    <label>Assign or Move Room</label>
+                    <select class="form-control" @bind="student.SelectedRoomId">
+                        <option value="">Select room</option>
+                        @foreach (var room in rooms)
+                        {
+                            <option value="@room.Id">@room.Name (@room.GradeLevel)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mt-2">
+                    <button type="button" class="btn" @onclick="() => BeginEdit(student)">Edit</button>
+                    <button type="button" class="btn ms-2" @onclick="() => AssignRoomAsync(student.Id, student.SelectedRoomId)">Save Room</button>
+                    <button type="button" class="btn ms-2" @onclick="() => EndActiveEnrollmentAsync(student.Id)">End Enrollment</button>
+                    @if (student.IsActive)
+                    {
+                        <button type="button" class="btn ms-2" @onclick="() => SetStudentActiveAsync(student.Id, false)">Deactivate</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn ms-2" @onclick="() => SetStudentActiveAsync(student.Id, true)">Reactivate</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private Guid? schoolId;
+    private bool loaded;
+    private string? statusMessage;
+    private Guid? editingStudentId;
+    private List<StudentVm> students = [];
+    private List<RoomVm> rooms = [];
+    private StudentFormModel studentForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        schoolId = await SchoolContext.GetSchoolIdAsync();
+        await LoadPageAsync();
+    }
+
+    private async Task LoadPageAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            loaded = true;
+            return;
+        }
+
+        rooms = await DbContext.Rooms
+            .Where(x => x.SchoolId == schoolId.Value)
+            .OrderBy(x => x.Name)
+            .Select(x => new RoomVm(x.Id, x.Name, x.GradeLevel))
+            .ToListAsync();
+
+        var attendanceCounts = await DbContext.AttendanceRecords
+            .Where(x => x.SchoolId == schoolId.Value)
+            .GroupBy(x => x.StudentId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var studentRows = await DbContext.Students
+            .Where(x => x.SchoolId == schoolId.Value)
+            .Include(x => x.Enrollments.Where(e => e.IsActive))
+                .ThenInclude(x => x.Room)
+            .OrderBy(x => x.LastName)
+            .ThenBy(x => x.FirstName)
+            .ToListAsync();
+
+        students = studentRows
+            .Select(x =>
+            {
+                var activeEnrollment = x.Enrollments.FirstOrDefault(e => e.IsActive);
+                attendanceCounts.TryGetValue(x.Id, out var count);
+
+                return new StudentVm
+                {
+                    Id = x.Id,
+                    FirstName = x.FirstName,
+                    LastName = x.LastName,
+                    DateOfBirth = x.DateOfBirth,
+                    IsActive = x.IsActive,
+                    ActiveRoomName = activeEnrollment?.Room.Name ?? "Unassigned",
+                    ActiveRoomId = activeEnrollment?.RoomId,
+                    SelectedRoomId = activeEnrollment?.RoomId,
+                    AttendanceCount = count
+                };
+            })
+            .ToList();
+
+        loaded = true;
+    }
+
+    private async Task SaveStudentAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            statusMessage = "School context is not set for this account.";
+            return;
+        }
+
+        var firstName = studentForm.FirstName.Trim();
+        var lastName = studentForm.LastName.Trim();
+
+        try
+        {
+            if (editingStudentId.HasValue)
+            {
+                var existing = await DbContext.Students.FirstOrDefaultAsync(x => x.Id == editingStudentId.Value);
+                if (existing is null)
+                {
+                    statusMessage = "Student could not be found.";
+                    return;
+                }
+
+                await TenantGuard.RequireSchoolMutationAccessAsync(
+                    existing.SchoolId,
+                    action: "Student:Update",
+                    entityName: nameof(StudentProfile),
+                    entityId: existing.Id.ToString(),
+                    deniedMetadata: new { existing.SchoolId });
+
+                existing.FirstName = firstName;
+                existing.LastName = lastName;
+                existing.DateOfBirth = studentForm.DateOfBirth;
+
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Student:Update",
+                    entityName: nameof(StudentProfile),
+                    entityId: existing.Id.ToString(),
+                    schoolId: existing.SchoolId,
+                    metadata: new { existing.FirstName, existing.LastName, existing.DateOfBirth });
+
+                statusMessage = "Student updated.";
+                CancelEdit();
+            }
+            else
+            {
+                var student = new StudentProfile
+                {
+                    Id = Guid.NewGuid(),
+                    SchoolId = schoolId.Value,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    DateOfBirth = studentForm.DateOfBirth,
+                    IsActive = true
+                };
+
+                await TenantGuard.RequireSchoolMutationAccessAsync(
+                    student.SchoolId,
+                    action: "Student:Create",
+                    entityName: nameof(StudentProfile),
+                    entityId: student.Id.ToString(),
+                    deniedMetadata: new { student.SchoolId });
+
+                DbContext.Students.Add(student);
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Student:Create",
+                    entityName: nameof(StudentProfile),
+                    entityId: student.Id.ToString(),
+                    schoolId: student.SchoolId,
+                    metadata: new { student.FirstName, student.LastName, student.DateOfBirth });
+
+                statusMessage = "Student created.";
+                studentForm = new StudentFormModel();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to modify students outside your school scope.";
+        }
+
+        await LoadPageAsync();
+    }
+
+    private void BeginEdit(StudentVm student)
+    {
+        editingStudentId = student.Id;
+        studentForm = new StudentFormModel
+        {
+            FirstName = student.FirstName,
+            LastName = student.LastName,
+            DateOfBirth = student.DateOfBirth
+        };
+    }
+
+    private void CancelEdit()
+    {
+        editingStudentId = null;
+        studentForm = new StudentFormModel();
+    }
+
+    private async Task AssignRoomAsync(Guid studentId, Guid? roomId)
+    {
+        if (!roomId.HasValue)
+        {
+            statusMessage = "Select a room before saving enrollment.";
+            return;
+        }
+
+        var student = await DbContext.Students.FirstOrDefaultAsync(x => x.Id == studentId);
+        var room = await DbContext.Rooms.FirstOrDefaultAsync(x => x.Id == roomId.Value);
+
+        if (student is null || room is null)
+        {
+            statusMessage = "Student or room could not be found.";
+            return;
+        }
+
+        if (student.SchoolId != room.SchoolId)
+        {
+            statusMessage = "Student and room must belong to the same school.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                student.SchoolId,
+                action: "Enrollment:Upsert",
+                entityName: nameof(StudentEnrollment),
+                entityId: studentId.ToString(),
+                deniedMetadata: new { student.SchoolId, roomId });
+
+            var activeEnrollment = await DbContext.StudentEnrollments
+                .Where(x => x.StudentId == studentId && x.IsActive)
+                .OrderByDescending(x => x.StartDate)
+                .FirstOrDefaultAsync();
+
+            if (activeEnrollment is not null && activeEnrollment.RoomId == roomId.Value)
+            {
+                statusMessage = "Student is already assigned to that room.";
+                return;
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+            if (activeEnrollment is not null)
+            {
+                activeEnrollment.IsActive = false;
+                activeEnrollment.EndDate = today;
+            }
+
+            var enrollment = new StudentEnrollment
+            {
+                Id = Guid.NewGuid(),
+                SchoolId = student.SchoolId,
+                StudentId = studentId,
+                RoomId = roomId.Value,
+                StartDate = today,
+                IsActive = true
+            };
+
+            DbContext.StudentEnrollments.Add(enrollment);
+            await DbContext.SaveChangesAsync();
+            await TenantGuard.LogMutationAsync(
+                action: "Enrollment:Upsert",
+                entityName: nameof(StudentEnrollment),
+                entityId: enrollment.Id.ToString(),
+                schoolId: enrollment.SchoolId,
+                metadata: new { enrollment.StudentId, enrollment.RoomId, PreviousRoomId = activeEnrollment?.RoomId });
+
+            statusMessage = "Enrollment updated.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to change enrollment outside your school scope.";
+        }
+
+        await LoadPageAsync();
+    }
+
+    private async Task EndActiveEnrollmentAsync(Guid studentId)
+    {
+        var enrollment = await DbContext.StudentEnrollments
+            .Where(x => x.StudentId == studentId && x.IsActive)
+            .OrderByDescending(x => x.StartDate)
+            .FirstOrDefaultAsync();
+
+        if (enrollment is null)
+        {
+            statusMessage = "No active enrollment found for this student.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                enrollment.SchoolId,
+                action: "Enrollment:End",
+                entityName: nameof(StudentEnrollment),
+                entityId: enrollment.Id.ToString(),
+                deniedMetadata: new { enrollment.SchoolId, enrollment.StudentId });
+
+            enrollment.IsActive = false;
+            enrollment.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+            await DbContext.SaveChangesAsync();
+            await TenantGuard.LogMutationAsync(
+                action: "Enrollment:End",
+                entityName: nameof(StudentEnrollment),
+                entityId: enrollment.Id.ToString(),
+                schoolId: enrollment.SchoolId,
+                metadata: new { enrollment.StudentId, enrollment.RoomId, enrollment.EndDate });
+
+            statusMessage = "Enrollment ended.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to end enrollment outside your school scope.";
+        }
+
+        await LoadPageAsync();
+    }
+
+    private async Task SetStudentActiveAsync(Guid studentId, bool isActive)
+    {
+        var student = await DbContext.Students.FirstOrDefaultAsync(x => x.Id == studentId);
+        if (student is null)
+        {
+            statusMessage = "Student could not be found.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                student.SchoolId,
+                action: isActive ? "Student:Reactivate" : "Student:Deactivate",
+                entityName: nameof(StudentProfile),
+                entityId: student.Id.ToString(),
+                deniedMetadata: new { student.SchoolId });
+
+            student.IsActive = isActive;
+
+            if (!isActive)
+            {
+                var activeEnrollment = await DbContext.StudentEnrollments
+                    .Where(x => x.StudentId == student.Id && x.IsActive)
+                    .OrderByDescending(x => x.StartDate)
+                    .FirstOrDefaultAsync();
+
+                if (activeEnrollment is not null)
+                {
+                    activeEnrollment.IsActive = false;
+                    activeEnrollment.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+                }
+            }
+
+            await DbContext.SaveChangesAsync();
+            await TenantGuard.LogMutationAsync(
+                action: isActive ? "Student:Reactivate" : "Student:Deactivate",
+                entityName: nameof(StudentProfile),
+                entityId: student.Id.ToString(),
+                schoolId: student.SchoolId,
+                metadata: new { student.FirstName, student.LastName, student.IsActive });
+
+            statusMessage = isActive ? "Student reactivated." : "Student deactivated.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to change student status outside your school scope.";
+        }
+
+        await LoadPageAsync();
+    }
+
+    private void OnDobChanged(ChangeEventArgs args)
+    {
+        if (args.Value is null)
+        {
+            studentForm.DateOfBirth = null;
+            return;
+        }
+
+        var raw = args.Value.ToString();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            studentForm.DateOfBirth = null;
+            return;
+        }
+
+        if (DateOnly.TryParse(raw, out var parsed))
+        {
+            studentForm.DateOfBirth = parsed;
+        }
+    }
+
+    private string GetDobValue()
+    {
+        return studentForm.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
+
+    private sealed class StudentFormModel
+    {
+        [Required]
+        [MaxLength(100)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(100)]
+        public string LastName { get; set; } = string.Empty;
+
+        public DateOnly? DateOfBirth { get; set; }
+    }
+
+    private sealed record RoomVm(Guid Id, string Name, string GradeLevel);
+
+    private sealed class StudentVm
+    {
+        public Guid Id { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public DateOnly? DateOfBirth { get; set; }
+        public bool IsActive { get; set; }
+        public string ActiveRoomName { get; set; } = "Unassigned";
+        public Guid? ActiveRoomId { get; set; }
+        public Guid? SelectedRoomId { get; set; }
+        public int AttendanceCount { get; set; }
+        public string DisplayName => $"{FirstName} {LastName}".Trim();
+    }
+}

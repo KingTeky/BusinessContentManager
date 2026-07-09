@@ -9,10 +9,12 @@ Last updated: 2026-07-09
 | Auth and role policies | Done | Identity roles and authorization policies configured. |
 | Domain model and EF mapping | Done | Core entities, relations, indexes, and constraints implemented. |
 | Seed data | Done | Roles, demo school, users, room, student, attendance seeded. |
+| Tenant mutation guardrails | Done | `ITenantGuardService` and `TenantGuardService` added and used by mutation flows. |
 | Dashboard page | Done | Live summary and room cards from database. |
-| Rooms page | Done | Data-backed room management view (read/list). |
-| Users page | Done | Data-backed user list with role join. |
-| Attendance page + CSV export | Done | Filtering and browser download implemented. |
+| Rooms page | Done | Guarded room create/update/delete plus list/stat view. |
+| Students page | Done | Guarded student create/update/status and enrollment assign/end flows. |
+| Users page | Done | Guarded role/status mutation actions plus list view. |
+| Attendance page + CSV export | Done | Filtering/export plus guarded check-in/check-out actions. |
 | Settings page | Done | School settings load and save implemented. |
 | Notification queue service | Done | Queue and mark-sent service layer added. |
 | PWA/fullscreen baseline | Done | Manifest and fullscreen helper JS included. |
@@ -113,13 +115,21 @@ Dashboard:
 
 Rooms:
 - Room cards with teacher, capacity, student counts, present today.
+- Guarded create/update/delete actions with enrollment/assignment/history delete protection.
+
+Students:
+- Guarded student create/update and activate/deactivate actions.
+- Enrollment assign/move and end-enrollment actions.
 
 Users:
 - Joined user and role view by school.
+- Guarded role and active-status mutation actions restricted to SchoolAdmin/AppOwner.
 
 Attendance:
 - Date range and status filters.
 - CSV export in browser.
+- Guarded check-in/check-out actions.
+- Duplicate check-in prevention per student/day.
 
 Settings:
 - Editable school settings persisted in database.
@@ -146,9 +156,7 @@ Pending:
 - SQLite transitive dependency warning exists (`NU1903` for `SQLitePCLRaw.lib.e_sqlite3`).
 
 ## Next Milestones
-1. Add CRUD actions for Rooms, Users, Students, and Attendance.
-2. Enforce tenant guardrails in service layer for all mutations.
-3. Add background notification worker and channel adapters.
-4. Move runtime provider to PostgreSQL when stable EF 10-compatible provider is available.
-5. Add tests for domain rules, authorization, and critical queries.
-6. Implement multilingual support later.
+1. Add background notification worker and channel adapters.
+2. Move runtime provider to PostgreSQL when stable EF 10-compatible provider is available.
+3. Add tests for domain rules, authorization, and critical queries.
+4. Implement multilingual support later.

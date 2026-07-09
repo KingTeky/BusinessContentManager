@@ -1,11 +1,15 @@
 @page "/users"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Constants
 @using BlossomTreeManager.Web.Services
 @inject ApplicationDbContext DbContext
 @inject ISchoolContext SchoolContext
+@inject ITenantGuardService TenantGuard
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Users</PageTitle>
 
@@ -21,52 +25,290 @@ else if (!loaded)
 }
 else
 {
-    <div class="users-grid">
-        @foreach (var user in users)
+    @if (!canManageUsers)
+    {
+        <p>You do not have permission to manage user roles and status.</p>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
         {
-            <div class="user-card">
-                <h3>@user.FullName</h3>
-                <p><strong>Role:</strong> @user.RoleName</p>
-                <p><strong>Email:</strong> @user.Email</p>
-                <p><strong>Status:</strong> @(user.IsActive ? "Active" : "Inactive")</p>
-            </div>
+            <p class="mb-3">@statusMessage</p>
         }
-    </div>
+
+        <div class="users-grid">
+            @foreach (var user in users)
+            {
+                <div class="user-card">
+                    <h3>@user.FullName</h3>
+                    <p><strong>Email:</strong> @user.Email</p>
+                    <p><strong>Status:</strong> @(user.IsActive ? "Active" : "Inactive")</p>
+
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select class="form-control" @bind="user.SelectedRoleName">
+                            @foreach (var roleName in assignableRoles)
+                            {
+                                <option value="@roleName">@roleName</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mt-2">
+                        <button type="button" class="btn" @onclick="() => SaveRoleAsync(user)">Save Role</button>
+                        <button type="button" class="btn ms-2" @onclick="() => ToggleActiveAsync(user)">
+                            @(user.IsActive ? "Deactivate" : "Reactivate")
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 }
 
 @code {
+    private static readonly string[] assignableRoles =
+    [
+        ApplicationRoles.SchoolAdmin,
+        ApplicationRoles.SchoolStaff,
+        ApplicationRoles.Teacher,
+        ApplicationRoles.Parent
+    ];
+
     private Guid? schoolId;
     private bool loaded;
+    private bool canManageUsers;
+    private string? statusMessage;
+    private string? currentUserId;
     private List<UserVm> users = [];
 
     protected override async Task OnInitializedAsync()
     {
         schoolId = await SchoolContext.GetSchoolIdAsync();
+        currentUserId = await SchoolContext.GetUserIdAsync();
+
+        if (!string.IsNullOrWhiteSpace(currentUserId))
+        {
+            var currentUser = await UserManager.FindByIdAsync(currentUserId);
+            if (currentUser is not null)
+            {
+                canManageUsers = await UserManager.IsInRoleAsync(currentUser, ApplicationRoles.AppOwner)
+                                 || await UserManager.IsInRoleAsync(currentUser, ApplicationRoles.SchoolAdmin);
+            }
+        }
+
         if (!schoolId.HasValue)
         {
             loaded = true;
             return;
         }
 
-        users = await DbContext.Users
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            users = [];
+            loaded = true;
+            return;
+        }
+
+        var userRows = await DbContext.Users
             .Where(x => x.SchoolId == schoolId.Value)
-            .Join(DbContext.UserRoles,
-                user => user.Id,
-                userRole => userRole.UserId,
-                (user, userRole) => new { user, userRole })
-            .Join(DbContext.Roles,
-                x => x.userRole.RoleId,
-                role => role.Id,
-                (x, role) => new UserVm(
-                    x.user.FullName,
-                    x.user.Email ?? string.Empty,
-                    role.Name ?? "Unknown",
-                    x.user.IsActive))
             .OrderBy(x => x.FullName)
+            .Select(x => new
+            {
+                x.Id,
+                x.SchoolId,
+                x.FullName,
+                x.Email,
+                x.IsActive
+            })
             .ToListAsync();
+
+        var roleRows = await DbContext.UserRoles
+            .Join(DbContext.Roles,
+                userRole => userRole.RoleId,
+                role => role.Id,
+                (userRole, role) => new
+                {
+                    userRole.UserId,
+                    RoleName = role.Name ?? string.Empty
+                })
+            .ToListAsync();
+
+        var roleByUserId = roleRows
+            .Where(x => !string.IsNullOrWhiteSpace(x.RoleName))
+            .GroupBy(x => x.UserId)
+            .ToDictionary(x => x.Key, x => x.Select(v => v.RoleName).FirstOrDefault() ?? "Unknown");
+
+        users = userRows
+            .Select(x =>
+            {
+                roleByUserId.TryGetValue(x.Id, out var roleName);
+                roleName ??= ApplicationRoles.SchoolStaff;
+
+                return new UserVm
+                {
+                    UserId = x.Id,
+                    SchoolId = x.SchoolId,
+                    FullName = x.FullName,
+                    Email = x.Email ?? string.Empty,
+                    IsActive = x.IsActive,
+                    RoleName = roleName,
+                    SelectedRoleName = assignableRoles.Contains(roleName) ? roleName : ApplicationRoles.SchoolStaff
+                };
+            })
+            .ToList();
 
         loaded = true;
     }
 
-    private sealed record UserVm(string FullName, string Email, string RoleName, bool IsActive);
+    private async Task SaveRoleAsync(UserVm user)
+    {
+        if (!canManageUsers)
+        {
+            statusMessage = "Only SchoolAdmin or AppOwner can change user roles.";
+            return;
+        }
+
+        if (!assignableRoles.Contains(user.SelectedRoleName))
+        {
+            statusMessage = "Selected role is not allowed in this screen.";
+            return;
+        }
+
+        var entity = await UserManager.FindByIdAsync(user.UserId);
+        if (entity is null)
+        {
+            statusMessage = "User could not be found.";
+            return;
+        }
+
+        if (!entity.SchoolId.HasValue)
+        {
+            statusMessage = "Only school-scoped users can be managed here.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                entity.SchoolId.Value,
+                action: "User:RoleChange",
+                entityName: nameof(ApplicationUser),
+                entityId: entity.Id,
+                deniedMetadata: new { entity.SchoolId, user.SelectedRoleName });
+
+            var currentRoles = await UserManager.GetRolesAsync(entity);
+            var currentRole = currentRoles.FirstOrDefault();
+            if (string.Equals(currentRole, user.SelectedRoleName, StringComparison.Ordinal))
+            {
+                statusMessage = "Role is already set to the selected value.";
+                return;
+            }
+
+            if (currentRoles.Count > 0)
+            {
+                var removeResult = await UserManager.RemoveFromRolesAsync(entity, currentRoles);
+                if (!removeResult.Succeeded)
+                {
+                    statusMessage = "Unable to remove existing user roles.";
+                    return;
+                }
+            }
+
+            var addResult = await UserManager.AddToRoleAsync(entity, user.SelectedRoleName);
+            if (!addResult.Succeeded)
+            {
+                statusMessage = "Unable to set new user role.";
+                return;
+            }
+
+            await TenantGuard.LogMutationAsync(
+                action: "User:RoleChange",
+                entityName: nameof(ApplicationUser),
+                entityId: entity.Id,
+                schoolId: entity.SchoolId,
+                metadata: new { PreviousRole = currentRole, NewRole = user.SelectedRoleName, entity.Email });
+
+            statusMessage = "User role updated.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to change roles outside your school scope.";
+        }
+
+        await LoadUsersAsync();
+    }
+
+    private async Task ToggleActiveAsync(UserVm user)
+    {
+        if (!canManageUsers)
+        {
+            statusMessage = "Only SchoolAdmin or AppOwner can change user status.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentUserId) && string.Equals(currentUserId, user.UserId, StringComparison.Ordinal))
+        {
+            statusMessage = "You cannot change your own active status.";
+            return;
+        }
+
+        var entity = await DbContext.Users.FirstOrDefaultAsync(x => x.Id == user.UserId);
+        if (entity is null)
+        {
+            statusMessage = "User could not be found.";
+            return;
+        }
+
+        if (!entity.SchoolId.HasValue)
+        {
+            statusMessage = "Only school-scoped users can be managed here.";
+            return;
+        }
+
+        try
+        {
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                entity.SchoolId.Value,
+                action: "User:StatusChange",
+                entityName: nameof(ApplicationUser),
+                entityId: entity.Id,
+                deniedMetadata: new { entity.SchoolId, NewStatus = !entity.IsActive });
+
+            var previousStatus = entity.IsActive;
+            entity.IsActive = !entity.IsActive;
+
+            await DbContext.SaveChangesAsync();
+            await TenantGuard.LogMutationAsync(
+                action: "User:StatusChange",
+                entityName: nameof(ApplicationUser),
+                entityId: entity.Id,
+                schoolId: entity.SchoolId,
+                metadata: new { PreviousStatus = previousStatus, NewStatus = entity.IsActive, entity.Email });
+
+            statusMessage = entity.IsActive ? "User reactivated." : "User deactivated.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            statusMessage = "You are not allowed to change user status outside your school scope.";
+        }
+
+        await LoadUsersAsync();
+    }
+
+    private sealed class UserVm
+    {
+        public string UserId { get; set; } = string.Empty;
+        public Guid? SchoolId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string RoleName { get; set; } = string.Empty;
+        public string SelectedRoleName { get; set; } = ApplicationRoles.SchoolStaff;
+        public bool IsActive { get; set; }
+    }
 }

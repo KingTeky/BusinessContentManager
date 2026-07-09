@@ -1,11 +1,14 @@
 @page "/rooms"
-@attribute [Authorize]
+@attribute [Authorize(Policy = "SchoolAdminOrStaff")]
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using BlossomTreeManager.Web.Data
+@using BlossomTreeManager.Web.Data.Entities
 @using BlossomTreeManager.Web.Services
 @inject ApplicationDbContext DbContext
 @inject ISchoolContext SchoolContext
+@inject ITenantGuardService TenantGuard
 
 <PageTitle>Rooms</PageTitle>
 
@@ -21,6 +24,36 @@ else if (!loaded)
 }
 else
 {
+    <EditForm Model="roomForm" OnValidSubmit="SaveRoomAsync" class="settings-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label>Room Name</label>
+            <InputText class="form-control" @bind-Value="roomForm.Name" />
+        </div>
+
+        <div class="form-group">
+            <label>Grade Level</label>
+            <InputText class="form-control" @bind-Value="roomForm.GradeLevel" />
+        </div>
+
+        <div class="form-group">
+            <label>Capacity</label>
+            <InputNumber class="form-control" @bind-Value="roomForm.Capacity" />
+        </div>
+
+        <button type="submit" class="btn">@(editingRoomId.HasValue ? "Save Room" : "Add Room")</button>
+        @if (editingRoomId.HasValue)
+        {
+            <button type="button" class="btn ms-2" @onclick="CancelEdit">Cancel</button>
+        }
+    </EditForm>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <p class="mt-3">@statusMessage</p>
+    }
+
     <div class="rooms-grid">
         @foreach (var room in rooms)
         {
@@ -33,6 +66,10 @@ else
                 <div class="stats">
                     <span>Present Today: @room.PresentToday</span>
                 </div>
+                <div class="mt-2">
+                    <button type="button" class="btn" @onclick="() => BeginEdit(room)">Edit</button>
+                    <button type="button" class="btn ms-2" @onclick="() => DeleteRoomAsync(room.Id)">Delete</button>
+                </div>
             </div>
         }
     </div>
@@ -41,6 +78,9 @@ else
 @code {
     private Guid? schoolId;
     private bool loaded;
+    private Guid? editingRoomId;
+    private string? statusMessage;
+    private RoomFormModel roomForm = new();
     private List<RoomVm> rooms = [];
 
     protected override async Task OnInitializedAsync()
@@ -52,10 +92,22 @@ else
             return;
         }
 
+        await LoadRoomsAsync();
+    }
+
+    private async Task LoadRoomsAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            loaded = true;
+            return;
+        }
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         rooms = await DbContext.Rooms
             .Where(x => x.SchoolId == schoolId.Value)
             .Select(room => new RoomVm(
+                room.Id,
                 room.Name,
                 room.GradeLevel,
                 room.Capacity,
@@ -68,5 +120,179 @@ else
         loaded = true;
     }
 
-    private sealed record RoomVm(string Name, string GradeLevel, int Capacity, string Teacher, int StudentCount, int PresentToday);
+    private async Task SaveRoomAsync()
+    {
+        if (!schoolId.HasValue)
+        {
+            statusMessage = "School context is not set for this account.";
+            return;
+        }
+
+        var trimmedName = roomForm.Name.Trim();
+        var trimmedGrade = roomForm.GradeLevel.Trim();
+
+        if (editingRoomId.HasValue)
+        {
+            var existing = await DbContext.Rooms.FirstOrDefaultAsync(x => x.Id == editingRoomId.Value);
+            if (existing is null)
+            {
+                statusMessage = "Room could not be found.";
+                return;
+            }
+
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                existing.SchoolId,
+                action: "Room:Update",
+                entityName: nameof(Room),
+                entityId: existing.Id.ToString(),
+                deniedMetadata: new { existing.SchoolId });
+
+            existing.Name = trimmedName;
+            existing.GradeLevel = trimmedGrade;
+            existing.Capacity = roomForm.Capacity;
+
+            try
+            {
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Room:Update",
+                    entityName: nameof(Room),
+                    entityId: existing.Id.ToString(),
+                    schoolId: existing.SchoolId,
+                    metadata: new { existing.Name, existing.GradeLevel, existing.Capacity });
+
+                statusMessage = "Room updated.";
+                CancelEdit();
+            }
+            catch (DbUpdateException)
+            {
+                statusMessage = "Unable to save room. Room name may already exist for this school.";
+            }
+        }
+        else
+        {
+            var newRoom = new Room
+            {
+                Id = Guid.NewGuid(),
+                SchoolId = schoolId.Value,
+                Name = trimmedName,
+                GradeLevel = trimmedGrade,
+                Capacity = roomForm.Capacity
+            };
+
+            await TenantGuard.RequireSchoolMutationAccessAsync(
+                newRoom.SchoolId,
+                action: "Room:Create",
+                entityName: nameof(Room),
+                entityId: newRoom.Id.ToString(),
+                deniedMetadata: new { newRoom.SchoolId });
+
+            DbContext.Rooms.Add(newRoom);
+
+            try
+            {
+                await DbContext.SaveChangesAsync();
+                await TenantGuard.LogMutationAsync(
+                    action: "Room:Create",
+                    entityName: nameof(Room),
+                    entityId: newRoom.Id.ToString(),
+                    schoolId: newRoom.SchoolId,
+                    metadata: new { newRoom.Name, newRoom.GradeLevel, newRoom.Capacity });
+
+                roomForm = new RoomFormModel();
+                statusMessage = "Room created.";
+            }
+            catch (DbUpdateException)
+            {
+                statusMessage = "Unable to create room. Room name may already exist for this school.";
+            }
+        }
+
+        await LoadRoomsAsync();
+    }
+
+    private void BeginEdit(RoomVm room)
+    {
+        editingRoomId = room.Id;
+        roomForm = new RoomFormModel
+        {
+            Name = room.Name,
+            GradeLevel = room.GradeLevel,
+            Capacity = room.Capacity
+        };
+    }
+
+    private void CancelEdit()
+    {
+        editingRoomId = null;
+        roomForm = new RoomFormModel();
+    }
+
+    private async Task DeleteRoomAsync(Guid roomId)
+    {
+        var existing = await DbContext.Rooms
+            .Include(x => x.StudentEnrollments)
+            .Include(x => x.TeacherAssignments)
+            .Include(x => x.AttendanceRecords)
+            .FirstOrDefaultAsync(x => x.Id == roomId);
+
+        if (existing is null)
+        {
+            statusMessage = "Room could not be found.";
+            return;
+        }
+
+        await TenantGuard.RequireSchoolMutationAccessAsync(
+            existing.SchoolId,
+            action: "Room:Delete",
+            entityName: nameof(Room),
+            entityId: existing.Id.ToString(),
+            deniedMetadata: new { existing.SchoolId });
+
+        if (existing.StudentEnrollments.Any(x => x.IsActive))
+        {
+            statusMessage = "Cannot delete a room with active student enrollments.";
+            return;
+        }
+
+        if (existing.TeacherAssignments.Count > 0)
+        {
+            statusMessage = "Cannot delete a room with teacher assignments.";
+            return;
+        }
+
+        if (existing.AttendanceRecords.Count > 0)
+        {
+            statusMessage = "Cannot delete a room that has attendance history.";
+            return;
+        }
+
+        DbContext.Rooms.Remove(existing);
+        await DbContext.SaveChangesAsync();
+        await TenantGuard.LogMutationAsync(
+            action: "Room:Delete",
+            entityName: nameof(Room),
+            entityId: existing.Id.ToString(),
+            schoolId: existing.SchoolId,
+            metadata: new { existing.Name });
+
+        statusMessage = "Room deleted.";
+        await LoadRoomsAsync();
+    }
+
+    private sealed record RoomVm(Guid Id, string Name, string GradeLevel, int Capacity, string Teacher, int StudentCount, int PresentToday);
+
+    private sealed class RoomFormModel
+    {
+        [Required]
+        [MaxLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(100)]
+        public string GradeLevel { get; set; } = string.Empty;
+
+        [Range(1, 1000)]
+        public int Capacity { get; set; } = 30;
+    }
 }
